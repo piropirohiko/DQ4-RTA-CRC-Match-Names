@@ -280,9 +280,19 @@
 function generateValidRandomName() {
     const maxTries = 100;
     for (let t = 0; t < maxTries; t++) {
+        // --- ここを追加 ---
+        // 1～4文字の長さを、指定した確率で決定
+        const rand = Math.random();
+        let nameLen = 4;
+        if (rand < 0.1) nameLen = 1;       // 10%
+        else if (rand < 0.3) nameLen = 2;  // 20%
+        else if (rand < 0.6) nameLen = 3;  // 30%
+        else nameLen = 4;                  // 40%
+        // ------------------
+
         const randomChars = [];
         const values = [];
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < nameLen; i++) { // 修正: 4→nameLen
             const index = Math.floor(Math.random() * hiragana.length);
             randomChars.push(hiragana[index]);
             values.push(moji[index]);
