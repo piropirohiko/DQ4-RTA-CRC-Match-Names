@@ -49,9 +49,9 @@
             font-weight: bold;
             background-color: #000;
             color: #fff;
-            max-width: 660px; /* 11ボタン分に調整 */
-            margin: 20px ;
-            padding: 20px ;
+            max-width: 660px ; /* 11ボタン分に調整 */
+            margin: 16px auto;
+            padding: 16px auto;
             text-align: center;
             position: relative;
         }
@@ -64,7 +64,7 @@
             padding: 5px 10px;
             background-color: #000; /* 黒背景 */
             position: absolute;
-            top: 30; /* 白線中央に合わせる */
+            top: 10; /* 白線中央に合わせる */
             left: 50%;
             transform: translateX(-50%) translateY(-50%); /* 中央寄せかつ白線中央 */
             z-index: 1;
@@ -97,27 +97,29 @@
         }
         #buttonContainer {
             border: 4px solid #fff; /* ボタンエリアを囲む枠 */
-            padding: 10px;
+            padding: 8px;
             margin-top: -4px; /* 上側の白線を入力エリアの下部と一致 */
+            margin-bottom: -10px;
         }
         #buttonGrid {
             display: grid;
             font-weight: bold;
             grid-template-columns: repeat(11, 1fr);
-            gap: 5px;
+            gap: 4px;
             margin-bottom: 0px;
         }
         button {
-            padding: 8px Auto;
-            font-size: 20px;
+            padding: Auto;
+            font-size: 16px;
             font-weight: bold;
             background-color: #333;
             color: #fff;
             border: 2px solid #fff;
             border-radius: 0;
             cursor: pointer;
-            min-width: 30px;
-            height: 40px; /* 縦に伸びないよう固定 */
+            text-align: center; 
+            min-width: 24px;
+            height: 32px; /* 縦に伸びないよう固定 */
             transition: background-color 0.3s;
         }
         button:hover {
@@ -159,7 +161,7 @@
     <div id="extraButtons">
         <button id="resetButton" class="extra-button">リセット</button>
         <button id="randomButton" class="extra-button">ランダム</button>
-        <button id="clearButton">クリア</button>
+        <button id="clearButton">もどる</button>
         <button id="checkButton">チェック</button>
     </div>
     <div id="result"></div>
@@ -274,7 +276,44 @@
                 buttonGrid.appendChild(button);
             });
         });
+// ランダムでCRCチェックが通るまで繰り返す関数
+function generateValidRandomName() {
+    const maxTries = 10000;
+    for (let t = 0; t < maxTries; t++) {
+        const randomChars = [];
+        const values = [];
+        for (let i = 0; i < 4; i++) {
+            const index = Math.floor(Math.random() * hiragana.length);
+            randomChars.push(hiragana[index]);
+            values.push(moji[index]);
+        }
 
+        // パディング（4バイト未満になる場合）
+        while (values.length < 4) values.push(0x00);
+
+        const post1 = new Uint8Array(bytes1.slice(348));
+        const post2 = new Uint8Array(bytes2.slice(348));
+        const post3 = new Uint8Array(bytes3.slice(348));
+        const post4 = new Uint8Array(bytes4.slice(348));
+
+        for (let i = 0; i < values.length; i++) {
+            post1[i] = post2[i] = post3[i] = post4[i] = values[i];
+        }
+
+        const crc1 = crc8x2(post1, crc1_pre);
+        const crc2 = crc8x2(post2, crc2_pre);
+        const crc3 = crc8x2(post3, crc3_pre);
+        const crc4 = crc8x2(post4, crc4_pre);
+
+        const match12 = compareCRC(crc2, crc1);
+        const match34 = compareCRC(crc4, crc3);
+
+        if (match12 && match34) {
+            return randomChars.join("");
+        }
+    }
+    return null;
+}
         // 外部ボタンの機能
         document.getElementById("resetButton").onclick = () => {
             document.getElementById("inputArea").querySelector("span").textContent = "";
@@ -283,19 +322,26 @@
 
         document.getElementById("randomButton").onclick = () => {
             const inputArea = document.getElementById("inputArea").querySelector("span");
-            const randomChars = [];
-            for (let i = 0; i < 4; i++) {
-                const randomIndex = Math.floor(Math.random() * hiragana.length);
-                randomChars.push(hiragana[randomIndex]);
+            const resultDiv = document.getElementById("result");
+            const validName = generateValidRandomName();
+            if (validName) {
+                inputArea.textContent = validName.padEnd(4, " ").padStart(4, " ");
+                resultDiv.textContent = "";
+            } else {
+                inputArea.textContent = "";
+                resultDiv.textContent = "有効なCRC名が見つかりませんでした。";
+                resultDiv.className = "no-match";
             }
-            inputArea.textContent = randomChars.join("").padEnd(4, " ").padStart(4, " "); // 4文字分中央寄せ
-            document.getElementById("result").textContent = "";
         };
 
-        document.getElementById("clearButton").onclick = () => {
-            document.getElementById("inputArea").querySelector("span").textContent = "";
-            document.getElementById("result").textContent = "";
-        };
+document.getElementById("clearButton").onclick = () => {
+    const inputArea = document.getElementById("inputArea").querySelector("span");
+    let current = inputArea.textContent.trimEnd();
+    if (current.length > 0) {
+        current = current.slice(0, -1);
+    }
+    inputArea.textContent = current.padEnd(4, " ");
+};
 
         document.getElementById("checkButton").onclick = () => {
             const inputArea = document.getElementById("inputArea").querySelector("span");
