@@ -1,0 +1,357 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DQ4 CRC Checker (カスタム11x6 UI)</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            background-color: #000;
+            color: #fff;
+            max-width: 660px; /* 11ボタン分に調整 */
+            margin: 20px ;
+            padding: 20px ;
+            text-align: center;
+            position: relative;
+        }
+        #container {
+            padding: 10px;
+        }
+        #title {
+            font-size: 20px;
+            margin-bottom: -10px; /* 枠に被せる */
+            padding: 5px 10px;
+            background-color: #000; /* 黒背景 */
+            position: absolute;
+            top: 30; /* 白線中央に合わせる */
+            left: 50%;
+            transform: translateX(-50%) translateY(-50%); /* 中央寄せかつ白線中央 */
+            z-index: 1;
+        }
+        #inputArea {
+            border: 4px solid #fff;
+            padding: 10px;
+            margin-bottom: 0; /* ボタンエリアと結合 */
+            font-size: 18px;
+            min-height: 32px;
+            display: flex;
+            justify-content: center; /* 名前欄全体を中央寄せ */
+            align-items: center;
+            position: relative;
+            width: 160px; /* 4文字分の固定幅 */
+            margin: 0 auto; /* 中央寄せ */
+        }
+        #inputArea::after {
+            font-weight: bold;
+            content: "＿＿＿＿";
+            position: absolute;
+            top: 24px;
+            color: #fff;
+            pointer-events: none;
+        }
+        #inputArea span {
+            min-width: 160px; /* 4文字分のスペース確保 */
+            display: inline-block;
+            text-align: center; /* 名前を中央寄せ */
+        }
+        #buttonContainer {
+            border: 4px solid #fff; /* ボタンエリアを囲む枠 */
+            padding: 10px;
+            margin-top: -4px; /* 上側の白線を入力エリアの下部と一致 */
+        }
+        #buttonGrid {
+            display: grid;
+            font-weight: bold;
+            grid-template-columns: repeat(11, 1fr);
+            gap: 5px;
+            margin-bottom: 0px;
+        }
+        button {
+            padding: 8px Auto;
+            font-size: 20px;
+            font-weight: bold;
+            background-color: #333;
+            color: #fff;
+            border: 2px solid #fff;
+            border-radius: 0;
+            cursor: pointer;
+            min-width: 30px;
+            height: 40px; /* 縦に伸びないよう固定 */
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #555;
+        }
+        .extra-button {
+            background-color: #666;
+            border: 4px solid #fff; /* 新ボタンクラスのデザイン */
+            margin: 5px;
+        }
+        .extra-button:hover {
+            background-color: #888;
+        }
+        #clearButton, #checkButton {
+            background-color: #ff4444;
+            border: 4px solid #fff; /* 新ボタンクラスのデザイン */
+            margin: 5px;
+        }
+        #clearButton:hover, #checkButton:hover {
+            background-color: #cc0000;
+        }
+        #result {
+            margin-top: 10px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .match { color: #00ff00; }
+        .no-match { color: #ff0000; }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="title">なまえ</div>
+        <div id="inputArea"><span></span></div>
+        <div id="buttonContainer">
+            <div id="buttonGrid"></div>
+        </div>
+    </div>
+    <div id="extraButtons">
+        <button id="resetButton" class="extra-button">リセット</button>
+        <button id="randomButton" class="extra-button">ランダム</button>
+        <button id="clearButton">クリア</button>
+        <button id="checkButton">チェック</button>
+    </div>
+    <div id="result"></div>
+
+    <script>
+        // HEX文字列（750バイト、HEXで1500文字、697～698文字目が "11"）
+        const hexInput1 = "000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000801B0000000107040D0102001B00000000000082A6FFFFFFFFFFFF000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000320000000000110000000000000001000000008600000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000FF00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009800000000010000000000000420000000000FF000000000280000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000001"
+        const hexInput2 = "000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000801B0000000107040D0102001B00000000000082A6FFFFFFFFFFFF000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000320000000000110000000000000001000000008600000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000FF00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B"
+        const hexInput3 = "000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000801B0000000107040D0102001B0000000000004F1C1C4B567A7D73000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000AA370000000011000000000000000139000000860000000000000000000000000000000000000000000000000000000000000000000000000200000000009D21A32C000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000FF00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080004B4B4B4B4B4B4B5BCB4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B0073064B4B4B5B0B0B43004B5B004B4B8B005B004D4D4B4B028B4B4B4B5F004B6B4B4B4B4B4B4B4B4B4B134B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B014B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B4B004A"
+        const hexInput4 = "000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000801B0000000107040D0102001B0000000000004F1C1C4B567A7D73000000000000000001000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000AA370000000011000000000000000139000000860000000000000000000000000000000000000000000000000000000000000000000000000200000000009D21A32C000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000FF0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000042000000000000000000000280000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000003"
+
+        // HEXをUint8Arrayに変換
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes;
+        }
+
+        const bytes1 = hexToBytes(hexInput1);
+        const bytes2 = hexToBytes(hexInput2);
+        const bytes3 = hexToBytes(hexInput3);
+        const bytes4 = hexToBytes(hexInput4);
+
+        // mojiとhiragana配列
+        const moji = [
+            0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14,
+            0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E,
+            0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
+            0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32,
+            0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C,
+            0x6A, 0x6B
+        ];
+        const hiragana = [
+            "あ", "い", "う", "え", "お", "か", "き", "く", "け", "こ",
+            "さ", "し", "す", "せ", "そ", "た", "ち", "つ", "て", "と",
+            "な", "に", "ぬ", "ね", "の", "は", "ひ", "ふ", "へ", "ほ",
+            "ま", "み", "む", "め", "も", "や", "ゆ", "よ", "ら", "り",
+            "る", "れ", "ろ", "わ", "を", "ん", "っ", "ゃ", "ゅ", "ょ",
+            "゜", "゛"
+        ];
+
+        // CRC計算関数
+        function crc8x2(data, init_crc) {
+            let z12 = init_crc[0] & 0xFF;
+            let z13 = init_crc[1] & 0xFF;
+            for (let byte of data) {
+                let z16 = byte & 0xFF;
+                for (let i = 0; i < 8; i++) {
+                    let a = (z13 ^ z16) & 0xFF;
+                    z13 = ((z13 << 1) | (z12 >> 7)) & 0xFF;
+                    z12 = (z12 << 1) & 0xFF;
+                    z16 = (z16 << 1) & 0xFF;
+                    if (a & 0x80) {
+                        z12 = (z12 ^ 0x21) & 0xFF;
+                        z13 = (z13 ^ 0x10) & 0xFF;
+                    }
+                }
+            }
+            return [z12, z13];
+        }
+
+        // 比較関数
+        function compareCRC(crc_a, crc_b) {
+            let a_low = crc_a[0] & 0xFF;
+            let a_high = crc_a[1] & 0xFF;
+            let b_low = crc_b[0] & 0xFF;
+            let b_high = crc_b[1] & 0xFF;
+            let carry = 1;
+            let result_low = (a_low - b_low - (1 - carry)) & 0xFF;
+            carry = a_low >= b_low ? 1 : 0;
+            let result_high = (a_high - b_high - (1 - carry)) & 0xFF;
+            return result_high === 0;
+        }
+
+        // 前半のCRC値を計算
+        const bytes1_pre = bytes1.slice(0, 348);
+        const bytes2_pre = bytes2.slice(0, 348);
+        const bytes3_pre = bytes3.slice(0, 348);
+        const bytes4_pre = bytes4.slice(0, 348);
+        const crc1_pre = crc8x2(bytes1_pre, [0x3A, 0x3A]);
+        const crc2_pre = crc8x2(bytes2_pre, [0x3A, 0x3A]);
+        const crc3_pre = crc8x2(bytes3_pre, [0x3A, 0x3A]);
+        const crc4_pre = crc8x2(bytes4_pre, [0x3A, 0x3A]);
+
+        // ボタン配置（横11×縦6、中央にスペース）
+        const buttonGrid = document.getElementById("buttonGrid");
+        const layout = [
+            ["あ", "い", "う", "え", "お", "", "は", "ひ", "ふ", "へ", "ほ"],
+            ["か", "き", "く", "け", "こ", "", "ま", "み", "む", "め", "も"],
+            ["さ", "し", "す", "せ", "そ", "", "や", "", "ゆ", "", "よ"],
+            ["た", "ち", "つ", "て", "と", "", "ら", "り", "る", "れ", "ろ"],
+            ["な", "に", "ぬ", "ね", "の", "", "わ", "", "を", "", "ん"],
+            ["っ", "ゃ", "ゅ", "ょ", "゛", "", "゜", "", "", "", ""]
+        ];
+
+        layout.forEach(row => {
+            row.forEach(char => {
+                const button = document.createElement("button");
+                if (char) {
+                    button.textContent = char;
+                    button.onclick = () => {
+                        const inputArea = document.getElementById("inputArea").querySelector("span");
+                        let currentText = inputArea.textContent.trim();
+                        if (currentText.length < 4) {
+                            currentText += char;
+                            inputArea.textContent = currentText.padEnd(4, " ").padStart(4, " "); // 4文字分中央寄せ
+                        }
+                    };
+                }
+                buttonGrid.appendChild(button);
+            });
+        });
+
+        // 外部ボタンの機能
+        document.getElementById("resetButton").onclick = () => {
+            document.getElementById("inputArea").querySelector("span").textContent = "";
+            document.getElementById("result").textContent = "";
+        };
+
+        document.getElementById("randomButton").onclick = () => {
+            const inputArea = document.getElementById("inputArea").querySelector("span");
+            const randomChars = [];
+            for (let i = 0; i < 4; i++) {
+                const randomIndex = Math.floor(Math.random() * hiragana.length);
+                randomChars.push(hiragana[randomIndex]);
+            }
+            inputArea.textContent = randomChars.join("").padEnd(4, " ").padStart(4, " "); // 4文字分中央寄せ
+            document.getElementById("result").textContent = "";
+        };
+
+        document.getElementById("clearButton").onclick = () => {
+            document.getElementById("inputArea").querySelector("span").textContent = "";
+            document.getElementById("result").textContent = "";
+        };
+
+        document.getElementById("checkButton").onclick = () => {
+            const inputArea = document.getElementById("inputArea").querySelector("span");
+            const resultDiv = document.getElementById("result");
+            let input = inputArea.textContent.trim();
+
+            if (input.length === 0 || input.length > 4) {
+                resultDiv.textContent = "ひらがな1～4文字を入力してください。";
+                resultDiv.className = "no-match";
+                return;
+            }
+            for (let char of input) {
+                if (!hiragana.includes(char)) {
+                    resultDiv.textContent = "無効な文字が含まれています。ひらがなのみ入力してください。";
+                    resultDiv.className = "no-match";
+                    return;
+                }
+            }
+
+            const values = [];
+            for (let char of input) {
+                const index = hiragana.indexOf(char);
+                values.push(moji[index]);
+            }
+            while (values.length < 4) {
+                values.push(0x00);
+            }
+
+            const modifiedBytes1_post = new Uint8Array(bytes1.slice(348));
+            const modifiedBytes2_post = new Uint8Array(bytes2.slice(348));
+            const modifiedBytes3_post = new Uint8Array(bytes3.slice(348));
+            const modifiedBytes4_post = new Uint8Array(bytes4.slice(348));
+
+            for (let i = 0; i < values.length; i++) {
+                modifiedBytes1_post[i] = values[i];
+                modifiedBytes2_post[i] = values[i];
+                modifiedBytes3_post[i] = values[i];
+                modifiedBytes4_post[i] = values[i];
+            }
+
+            const crc1 = crc8x2(modifiedBytes1_post, crc1_pre);
+            const crc2 = crc8x2(modifiedBytes2_post, crc2_pre);
+            const crc3 = crc8x2(modifiedBytes3_post, crc3_pre);
+            const crc4 = crc8x2(modifiedBytes4_post, crc4_pre);
+
+            const match12 = compareCRC(crc2, crc1);
+            const match34 = compareCRC(crc4, crc3);
+
+            if (match12 && match34) {
+                resultDiv.textContent = `「${input}」はCRCチェックに一致しました！`;
+                resultDiv.className = "match";
+            } else {
+                resultDiv.textContent = `「${input}」はCRCチェックに一致しませんでした。`;
+                resultDiv.className = "no-match";
+            }
+        };
+    </script>
+</body>
+</html>
