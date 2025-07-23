@@ -284,8 +284,8 @@ function generateValidRandomName() {
         // 1～4文字の長さを、指定した確率で決定
         const rand = Math.random();
         let nameLen = 4;
-        if (rand < 0.1) nameLen = 1;       // 10%
-        else if (rand < 0.3) nameLen = 2;  // 20%
+        if (rand < 0.02) nameLen = 1;       // 10%
+        else if (rand < 0.15) nameLen = 2;  // 20%
         else if (rand < 0.6) nameLen = 3;  // 30%
         else nameLen = 4;                  // 40%
         // ------------------
